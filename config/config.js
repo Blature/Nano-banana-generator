@@ -9,7 +9,7 @@ module.exports = {
   // Gemini API Configuration
   gemini: {
     apiKey: process.env.GEMINI_API_KEY,
-    apiUrl: process.env.GEMINI_API_URL || 'https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-pro-nano-banana:generateContent',
+    modelName: process.env.GEMINI_MODEL_NAME || 'gemini-3-pro-image-preview',
   },
 
   // Root Admin IDs

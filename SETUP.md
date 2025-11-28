@@ -18,8 +18,9 @@
    - Copy the bot token
 
 4. **Gemini API Key**
-   - Get your API key from Google AI Studio or Google Cloud Console
-   - Ensure you have access to Gemini 3 Pro Nano Banana API
+   - Get your API key from [Google AI Studio](https://makersuite.google.com/app/apikey) or Google Cloud Console
+   - The project uses `@google/generative-ai` package
+   - Model used: `gemini-3-pro-image-preview` (for image generation)
 
 ## Installation Steps
 
@@ -34,11 +35,16 @@
    ```
 
 3. **Create `.env` file:**
-   Create a `.env` file in the root directory with the following content:
+   Copy the `.env.example` file to `.env`:
+   ```bash
+   cp .env.example .env
+   ```
+   
+   Or create a `.env` file manually in the root directory with the following content:
    ```env
    TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
    GEMINI_API_KEY=your_gemini_api_key_here
-   GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-pro-nano-banana:generateContent
+   GEMINI_MODEL_NAME=gemini-3-pro-image-preview
    ROOT_ADMIN_IDS=7544822519,218078175
    DB_HOST=localhost
    DB_PORT=5432
@@ -52,6 +58,7 @@
 4. **Update the `.env` file with your actual values:**
    - Replace `your_telegram_bot_token_here` with your Telegram bot token
    - Replace `your_gemini_api_key_here` with your Gemini API key
+   - The `GEMINI_MODEL_NAME` is set to `gemini-3-pro-image-preview` by default (you can change it if needed)
    - Update database credentials if different
    - Adjust `ROOT_ADMIN_IDS` if needed (comma-separated Telegram user IDs)
 
@@ -100,10 +107,11 @@
 - Check network connectivity
 
 ### Gemini API Errors
-- Verify the API key is correct
-- Check API quota/limits
-- Verify the API endpoint URL is correct
-- Note: The API response structure may need adjustment based on actual Gemini API implementation
+- Verify the API key is correct in `.env` file
+- Check API quota/limits in Google AI Studio
+- Verify the model name `GEMINI_MODEL_NAME` is correct (default: `gemini-3-pro-image-preview`)
+- Ensure you have access to the Gemini API and the specific model
+- Check that `@google/generative-ai` package is installed: `npm install`
 
 ### Permission Errors
 - Ensure non-admin users are added by root admins
@@ -111,8 +119,10 @@
 
 ## Notes
 
-- The Gemini API response parsing may need adjustment based on the actual API response format
+- The project uses `@google/generative-ai` package for Gemini API integration
+- Model `gemini-3-pro-image-preview` is used for image generation
 - Image data is stored in base64 format in the database
 - Sessions are automatically managed and can be canceled by users
 - All interactions are logged in the database for history
+- The `.env` file is gitignored for security - never commit it to version control
 

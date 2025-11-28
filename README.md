@@ -1,6 +1,6 @@
 # Nano Banana Generator - Telegram Bot
 
-A Telegram bot for image generation and editing using Gemini 3 Pro Nano Banana API.
+A Telegram bot for image generation and editing using Google's Gemini API with `@google/generative-ai` package.
 
 ## Features
 
@@ -31,11 +31,16 @@ cd Nano-banana-generator
 npm install
 ```
 
-3. Create a `.env` file in the root directory:
+3. Create a `.env` file in the root directory (copy from `.env.example`):
+```bash
+cp .env.example .env
+```
+
+Then edit `.env` with your actual values:
 ```env
 TELEGRAM_BOT_TOKEN=your_telegram_bot_token_here
 GEMINI_API_KEY=your_gemini_api_key_here
-GEMINI_API_URL=https://generativelanguage.googleapis.com/v1beta/models/gemini-3.0-pro-nano-banana:generateContent
+GEMINI_MODEL_NAME=gemini-3-pro-image-preview
 ROOT_ADMIN_IDS=7544822519,218078175
 DB_HOST=localhost
 DB_PORT=5432
@@ -81,11 +86,12 @@ Nano-banana-generator/
 ├── routes/
 │   └── botRoutes.js       # Bot route handlers
 ├── services/
-│   ├── geminiService.js   # Gemini API integration
+│   ├── geminiService.js   # Gemini API integration (using @google/generative-ai)
 │   └── telegramService.js # Telegram bot service
 ├── utils/
 │   └── logger.js          # Logging utility
-├── .env                   # Environment variables (create this)
+├── .env                   # Environment variables (copy from .env.example)
+├── .env.example           # Example environment variables file
 ├── .gitignore
 ├── package.json
 ├── README.md
