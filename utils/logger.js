@@ -3,6 +3,7 @@ const config = require('../config/config');
 
 const logger = winston.createLogger({
   level: config.isDevelopment ? 'debug' : 'info',
+  // In development, show debug logs, in production only info and above
   format: winston.format.combine(
     winston.format.timestamp(),
     winston.format.errors({ stack: true }),

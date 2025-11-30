@@ -27,35 +27,57 @@ class GeminiService {
       const parts = response.candidates?.[0]?.content?.parts || [];
       let imageBase64 = null;
       let imageUrl = null;
+      let responseText = '';
+      
+      // Log full response for debugging
+      logger.debug('Full API response:', JSON.stringify({
+        candidates: response.candidates,
+        parts: parts
+      }, null, 2));
       
       for (const part of parts) {
         // Check for inline_data (base64 image)
         if (part.inlineData) {
           imageBase64 = part.inlineData.data;
+          logger.info('Found image in inlineData');
         } else if (part.inline_data) {
           imageBase64 = part.inline_data.data;
+          logger.info('Found image in inline_data');
         }
         // Check for imageUrl
         else if (part.imageUrl) {
           imageUrl = part.imageUrl.url || part.imageUrl;
+          logger.info('Found image URL:', imageUrl);
         }
         // Check if text contains base64 image data
         else if (part.text) {
+          responseText += part.text;
           const base64Match = part.text.match(/data:image\/[^;]+;base64,([A-Za-z0-9+/=]+)/);
           if (base64Match) {
             imageBase64 = base64Match[1];
+            logger.info('Found base64 image in text');
           }
           // Check for URL in text
           const urlMatch = part.text.match(/https?:\/\/[^\s]+\.(jpg|jpeg|png|gif|webp)/i);
           if (urlMatch) {
             imageUrl = urlMatch[0];
+            logger.info('Found image URL in text:', imageUrl);
           }
         }
       }
       
+      // If no image found, log the response text for debugging
       if (!imageBase64 && !imageUrl) {
-        logger.warn('No image data found in response. Response parts:', JSON.stringify(parts, null, 2));
-        throw new Error('No image data found in API response. The model may not support image generation or the response format is unexpected.');
+        logger.warn('No image data found in response.');
+        logger.warn('Response text:', responseText || 'No text in response');
+        logger.warn('Response parts structure:', JSON.stringify(parts, null, 2));
+        
+        // Check if model returned text instead of image
+        if (responseText) {
+          throw new Error(`Model returned text instead of image. Response: "${responseText.substring(0, 200)}". The model '${this.modelName}' may not support image generation. Please check if this model is designed for image generation.`);
+        }
+        
+        throw new Error(`No image data found in API response. The model '${this.modelName}' may not support image generation or the response format is unexpected. Please verify the model supports image generation.`);
       }
       
       return {
@@ -67,16 +89,19 @@ class GeminiService {
     } catch (error) {
       logger.error('Error generating image with Gemini:', error);
       
-      // Provide more helpful error messages
-      if (error.message && error.message.includes('404')) {
-        throw new Error(`Model '${this.modelName}' not found. Please check the model name in your .env file.`);
+      // Log error details for debugging
+      if (error.response) {
+        logger.error('API Response status:', error.response.status);
+        logger.error('API Response data:', JSON.stringify(error.response.data, null, 2));
       }
       
-      if (error.message && error.message.includes('API key')) {
-        throw new Error('Invalid or missing Gemini API key. Please check your GEMINI_API_KEY in .env file.');
-      }
+      // Create a custom error with more details
+      const enhancedError = new Error(error.message || 'Unknown error occurred');
+      enhancedError.originalError = error;
+      enhancedError.response = error.response;
+      enhancedError.statusCode = error.response?.status || error.statusCode;
       
-      throw error;
+      throw enhancedError;
     }
   }
 
@@ -143,16 +168,19 @@ class GeminiService {
     } catch (error) {
       logger.error('Error editing image with Gemini:', error);
       
-      // Provide more helpful error messages
-      if (error.message && error.message.includes('404')) {
-        throw new Error(`Model '${this.modelName}' not found. Please check the model name in your .env file.`);
+      // Log error details for debugging
+      if (error.response) {
+        logger.error('API Response status:', error.response.status);
+        logger.error('API Response data:', JSON.stringify(error.response.data, null, 2));
       }
       
-      if (error.message && error.message.includes('API key')) {
-        throw new Error('Invalid or missing Gemini API key. Please check your GEMINI_API_KEY in .env file.');
-      }
+      // Create a custom error with more details
+      const enhancedError = new Error(error.message || 'Unknown error occurred');
+      enhancedError.originalError = error;
+      enhancedError.response = error.response;
+      enhancedError.statusCode = error.response?.status || error.statusCode;
       
-      throw error;
+      throw enhancedError;
     }
   }
 

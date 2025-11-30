@@ -4,6 +4,7 @@ const Interaction = require('../models/Interaction');
 const telegramService = require('../services/telegramService');
 const geminiService = require('../services/geminiService');
 const { checkAccess } = require('../middleware/authMiddleware');
+const GeminiErrorHandler = require('../utils/geminiErrorHandler');
 const logger = require('../utils/logger');
 const { Readable } = require('stream');
 
@@ -79,14 +80,31 @@ class BotController {
         session = await Session.create(telegramId, user.id);
         await this.generateNewImage(chatId, telegramId, user.id, session.id, text);
       } else {
-        // Edit existing image
-        await this.editImage(chatId, telegramId, user.id, session.id, text, session.last_image_base64);
+        // Check if session has a previous image
+        if (session.last_image_base64) {
+          // Edit existing image
+          await this.editImage(chatId, telegramId, user.id, session.id, text, session.last_image_base64);
+        } else {
+          // No previous image, treat as new generation
+          // Cancel old session and create new one
+          await Session.cancel(telegramId);
+          session = await Session.create(telegramId, user.id);
+          await this.generateNewImage(chatId, telegramId, user.id, session.id, text);
+        }
       }
     } catch (error) {
       logger.error('Error handling text message:', error);
+      
+      // Cancel session on error
+      try {
+        await Session.cancel(telegramId);
+      } catch (sessionError) {
+        logger.error('Error canceling session:', sessionError);
+      }
+      
       await telegramService.sendMessage(
         chatId,
-        'An error occurred while processing your request. Please try again.'
+        '❌ An error occurred while processing your request.\n\n✅ Please try again.'
       );
     }
   }
@@ -157,17 +175,28 @@ class BotController {
 
       const result = await geminiService.generateImage(prompt);
       
-      if (result.success && result.imageBase64) {
+      if (result.success && (result.imageBase64 || result.imageUrl)) {
         // Send the image
-        const imageBuffer = Buffer.from(result.imageBase64, 'base64');
-        await telegramService.sendPhoto(
-          chatId,
-          imageBuffer,
-          {
-            caption: `Generated image for: "${prompt}"`,
-            ...telegramService.createCancelSessionKeyboard()
-          }
-        );
+        if (result.imageBase64) {
+          const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+          await telegramService.sendPhoto(
+            chatId,
+            imageBuffer,
+            {
+              caption: `Generated image for: "${prompt}"`,
+              ...telegramService.createCancelSessionKeyboard()
+            }
+          );
+        } else if (result.imageUrl) {
+          await telegramService.sendPhoto(
+            chatId,
+            result.imageUrl,
+            {
+              caption: `Generated image for: "${prompt}"`,
+              ...telegramService.createCancelSessionKeyboard()
+            }
+          );
+        }
 
         // Update session
         await Session.updateLastImage(telegramId, result.imageUrl, result.imageBase64);
@@ -183,23 +212,44 @@ class BotController {
           responseBase64: result.imageBase64,
         });
       } else {
-        throw new Error('Failed to generate image');
+        throw new Error('Failed to generate image - no image data in response');
       }
     } catch (error) {
       logger.error('Error generating image:', error);
-      await telegramService.sendMessage(
-        chatId,
-        'Sorry, I encountered an error while generating the image. Please try again with a different prompt.'
-      );
+      
+      // Cancel session on error to allow user to try again
+      try {
+        await Session.cancel(telegramId);
+        logger.info(`Session canceled for user ${telegramId} due to error`);
+      } catch (sessionError) {
+        logger.error('Error canceling session:', sessionError);
+      }
+      
+      // Get user-friendly error message from GeminiErrorHandler
+      const errorMessage = GeminiErrorHandler.getUserMessage(error);
+      
+      // Add retry suggestion if applicable
+      const shouldRetry = GeminiErrorHandler.shouldRetry(error);
+      const finalMessage = errorMessage + 
+        (shouldRetry ? '\n\n✅ You can try again later.' : '\n\n✅ You can send a new prompt.');
+      
+      await telegramService.sendMessage(chatId, finalMessage);
     }
   }
 
   async editImage(chatId, telegramId, userId, sessionId, prompt, imageBase64) {
     try {
       if (!imageBase64) {
+        // Cancel session if no previous image found
+        try {
+          await Session.cancel(telegramId);
+        } catch (sessionError) {
+          logger.error('Error canceling session:', sessionError);
+        }
+        
         await telegramService.sendMessage(
           chatId,
-          'No previous image found. Please send an image first or start a new generation.'
+          '❌ No previous image found.\n\n✅ Please send a new image or start a new generation by sending a prompt.'
         );
         return;
       }
@@ -208,17 +258,28 @@ class BotController {
 
       const result = await geminiService.editImage(imageBase64, prompt);
       
-      if (result.success && result.imageBase64) {
+      if (result.success && (result.imageBase64 || result.imageUrl)) {
         // Send the edited image
-        const imageBuffer = Buffer.from(result.imageBase64, 'base64');
-        await telegramService.sendPhoto(
-          chatId,
-          imageBuffer,
-          {
-            caption: `Edited image with: "${prompt}"`,
-            ...telegramService.createCancelSessionKeyboard()
-          }
-        );
+        if (result.imageBase64) {
+          const imageBuffer = Buffer.from(result.imageBase64, 'base64');
+          await telegramService.sendPhoto(
+            chatId,
+            imageBuffer,
+            {
+              caption: `Edited image with: "${prompt}"`,
+              ...telegramService.createCancelSessionKeyboard()
+            }
+          );
+        } else if (result.imageUrl) {
+          await telegramService.sendPhoto(
+            chatId,
+            result.imageUrl,
+            {
+              caption: `Edited image with: "${prompt}"`,
+              ...telegramService.createCancelSessionKeyboard()
+            }
+          );
+        }
 
         // Update session
         await Session.updateLastImage(telegramId, result.imageUrl, result.imageBase64);
@@ -235,14 +296,28 @@ class BotController {
           responseBase64: result.imageBase64,
         });
       } else {
-        throw new Error('Failed to edit image');
+        throw new Error('Failed to edit image - no image data in response');
       }
     } catch (error) {
       logger.error('Error editing image:', error);
-      await telegramService.sendMessage(
-        chatId,
-        'Sorry, I encountered an error while editing the image. Please try again with a different prompt.'
-      );
+      
+      // Cancel session on error to allow user to try again
+      try {
+        await Session.cancel(telegramId);
+        logger.info(`Session canceled for user ${telegramId} due to error`);
+      } catch (sessionError) {
+        logger.error('Error canceling session:', sessionError);
+      }
+      
+      // Get user-friendly error message from GeminiErrorHandler
+      const errorMessage = GeminiErrorHandler.getUserMessage(error);
+      
+      // Add retry suggestion if applicable
+      const shouldRetry = GeminiErrorHandler.shouldRetry(error);
+      const finalMessage = errorMessage + 
+        (shouldRetry ? '\n\n✅ You can try again later.' : '\n\n✅ You can send a new image and prompt.');
+      
+      await telegramService.sendMessage(chatId, finalMessage);
     }
   }
 

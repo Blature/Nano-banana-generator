@@ -37,6 +37,14 @@ class TelegramService {
 
   async sendPhoto(chatId, photo, options = {}) {
     try {
+      // If photo is a Buffer, send it with proper options
+      if (Buffer.isBuffer(photo)) {
+        return await this.bot.sendPhoto(chatId, photo, {
+          ...options,
+          filename: 'image.jpg' // Fix deprecation warning
+        });
+      }
+      // If photo is a URL or file path
       return await this.bot.sendPhoto(chatId, photo, options);
     } catch (error) {
       logger.error('Error sending photo:', error);
